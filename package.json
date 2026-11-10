@@ -1,0 +1,66 @@
+{
+  "name": "dsh-card-theme",
+  "version": "0.6.0",
+  "description": "DSH Web GUI theme studio with three palettes (Nord, Solarized, One Dark), per-mode customization (accent, background, foreground, translucent sidebar, contrast, background image), an optional card layout for the left/center/right shell columns, and a conversation content column width via the platform --dsh-chat-user-width variable. Publishes CSS tokens and the host config through the official webserver/index-inject rows (tapIndex fallback on older shells).",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DaSea/dsh-card-theme.git"
+  },
+  "homepage": "https://github.com/DaSea/dsh-card-theme#readme",
+  "bugs": {
+    "url": "https://github.com/DaSea/dsh-card-theme/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "plugin",
+    "theme",
+    "web-gui",
+    "css-tokens",
+    "wallpaper",
+    "card-layout",
+    "content-width"
+  ],
+  "engines": {
+    "node": ">=22.19.0",
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
+  "type": "module",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "author": "Xu Yuanshan",
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/host-check.mjs && node test/client-check.mjs && node test/parity-check.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": false,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-theme"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5 || ^4.0.6-alpha.1",
+    "@deepseek-ai/dsh-host-webserver": "^0.2.1-rc.2 || ^0.2.2-alpha.2"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.0"
+  }
+}

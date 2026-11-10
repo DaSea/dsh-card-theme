@@ -1,0 +1,38 @@
+# dsh-card-theme bundle layer. Provides a "theme studio" with three palettes
+# (nord, solarized, onedark) plus the stock DeepSeek theme, per-mode custom
+# overrides for accent / background / foreground / translucent sidebar /
+# contrast / background image, an optional card layout for the three shell
+# columns, and a conversation content column width (centerContentWidth, px,
+# -1 = follow the platform default).
+# Values are CSS color/URL lists; names with spaces must be quoted.
+# The row's config is replaced entirely by later layers targeting the same id,
+# so restate every key you keep.
+- insert:
+    - id: card-theme-plugin
+      name: dsh-card-theme
+      config:
+        preset: nord
+        cardLayout: false
+        centerContentWidth: -1
+        light:
+          accent: ''
+          background: ''
+          foreground: ''
+          translucentSidebar: preset
+          contrast: -1
+          backgroundImage: ''
+          backgroundImageMask: -1
+          backgroundImageBlur: -1
+          backgroundImageSize: cover
+          backgroundImagePosition: center
+        dark:
+          accent: ''
+          background: ''
+          foreground: ''
+          translucentSidebar: preset
+          contrast: -1
+          backgroundImage: ''
+          backgroundImageMask: -1
+          backgroundImageBlur: -1
+          backgroundImageSize: cover
+          backgroundImagePosition: center
