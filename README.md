@@ -155,13 +155,9 @@ The test suite is plain Node (no test framework): `test/host-check.mjs` exercise
 
 ## License
 
-MIT © Xu Yuanshan
+MIT © DaSea
 
-## Links
+## Thanks
 
-- Repository: <https://github.com/DaSea/dsh-card-theme>
-- Issues: <https://github.com/DaSea/dsh-card-theme/issues>
+- Repository: <https://github.com/BeiZi6/dsh-theme-plugin>
 
-## 中文简介
-
-为 DeepSeek Harness (DSH) Web GUI 打造的主题工作室插件:3 套内置配色(Nord / Solarized / One Dark,浅色模式使用 One Light)+ DeepSeek 默认主题 `stock`;设置页内热切换、立即生效并持久化;通过官方 `webserver/index-inject` 结构化行向 HTTP index 与桌面端启动载荷注入首屏样式和宿主配置(`globalThis.__DSH_THEME_PLUGIN_CONFIG__`,旧版回退 `webServer.tapIndex`),并由 `ctx.theme.overrideTokens` 写入实时令牌;由背景/前景/强调三色与对比度函数式推导 100+ 语义令牌,并支持半透明侧边栏与背景图片(遮罩、模糊、填充、对齐)。适配 DSH 0.2.2-rc.1。
