@@ -2,7 +2,13 @@
 
 **[简体中文](README.zh-CN.md) · [English](README.md)**
 
-DeepSeek Harness (DSH) Web GUI 的主题工作室插件:3 套内置配色 —— Nord、Solarized、One Dark —— 外加 DeepSeek 默认主题,并支持完全自定义的浅色/深色调色板:强调色、背景、前景、半透明侧边栏、对比度与背景图片、左中右三栏可选的卡片布局,以及内容列宽度设定,立即生效、无需刷新页面。
+DSH Desktop主题，主要包含以下内容:
+1. 3 套内置配色 —— Nord、Solarized、One Dark —— 外加 DeepSeek 默认主题,并支持完全自定义的浅色/深色调色板;
+2. 强调色、背景、前景、半透明侧边栏、对比度与背景图片;
+3. 左中右三栏可选的卡片布局;
+4. 内容列宽度设定;
+
+![示例|640x480](./main.png)
 
 ## 特性
 
@@ -13,7 +19,6 @@ DeepSeek Harness (DSH) Web GUI 的主题工作室插件:3 套内置配色 ——
 - 📐 **内容区域宽度** —— 设定中间对话内容列的目标宽度(400–2400 px,快捷档 640/748/920/1200,或「跟随默认」),多余空间自动成为两侧留白;通过平台自身的 `--dsh-chat-user-width` 变量实现,对话区左右边缘的原生拖拽依然可用且本地优先。在「主题工作室」调节,或配置 `centerContentWidth`
 - ⚡ **即时热切换** —— 设置页「主题工作室」通过官方 `ctx.theme.overrideTokens` API 立即应用改动;浅色/深色自动跟随系统明暗偏好
 - 💾 **持久化** —— 选择保存在浏览器 `localStorage` 中,刷新后保持
-- 🧮 **100+ 派生令牌** —— 三个颜色加一个对比度值即可展开为当前版本的整套语义令牌:边框、层级、滚动条、提示框、代码块、气泡、侧边栏状态、设置卡片、插画、引导页表面……
 - 🪟 **半透明侧边栏** —— 通过 `--dsw-specific-sidebar-fill` 变量实现真正的毛玻璃侧边栏
 - 🔌 **仅使用官方接缝** —— `webserver/index-inject` 结构化行把首屏样式与宿主配置同时送到 HTTP index 和桌面端启动载荷(旧版回退 `webServer.tapIndex`);`ctx.theme.overrideTokens` 负责实时令牌,不修改任何供应商文件
 

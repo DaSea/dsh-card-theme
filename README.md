@@ -2,7 +2,13 @@
 
 **[English](README.md) · [简体中文](README.zh-CN.md)**
 
-Theme studio for the DeepSeek Harness (DSH) Web GUI: three built-in palettes — Nord, Solarized and One Dark — plus the stock DeepSeek theme, and fully customizable light/dark palettes: accent, background, foreground, translucent sidebar, contrast and a wallpaper background image, plus an optional card layout for the three shell columns and a conversation content column width, applied instantly with no page refresh.
+Theme for the DeepSeek Harness (DSH) Web GUI, has features:
+1. three built-in palettes — Nord, Solarized and One Dark — plus the stock DeepSeek theme, and fully customizable light/dark palettes;
+2. accent, background, foreground, translucent sidebar, contrast and a wallpaper background image;
+3. plus an optional card layout for the three shell columns;
+4. a conversation content column width;
+
+![示例|640x480](./main.png)
 
 ## Features
 
