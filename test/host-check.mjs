@@ -126,17 +126,21 @@ check('index.js: no fonts, no old center-width mechanism, renamed boot script ex
 })
 
 // --- 2. Config schema -----------------------------------------------------
-check('Config parses presets, cardLayout and centerContentWidth', () => {
+check('Config parses presets, cardLayout, centerContentWidth and uiScale', () => {
   const parsed = Config({ preset: 'onedark' })
   assert.equal(parsed.preset, 'onedark')
   assert.equal(parsed.cardLayout, false, 'card layout defaults off')
   assert.equal(parsed.centerContentWidth, -1, 'content width defaults to unlimited')
+  assert.equal(parsed.uiScale, 100, 'overall zoom defaults to 100%')
   assert.equal(Config({}).preset, 'nord')
   assert.equal(Config({ cardLayout: true }).cardLayout, true)
   assert.equal(Config({ cardLayout: false }).cardLayout, false)
   assert.equal(Config({ centerContentWidth: 900 }).centerContentWidth, 900)
   // The schema keeps the raw number; use sites clamp to 400..2400.
   assert.equal(Config({ centerContentWidth: 3000 }).centerContentWidth, 3000)
+  // The schema keeps the raw zoom too; use sites clamp to 70..200.
+  assert.equal(Config({ uiScale: 125 }).uiScale, 125)
+  assert.equal(Config({ uiScale: 500 }).uiScale, 500)
   // The retired v0.5 field name is just an unknown key; the new field stays off.
   assert.equal(Config({ centerMaxWidth: 900 }).centerContentWidth, -1)
   // `custom` and the retired preset ids stay accepted for config compatibility.
@@ -189,6 +193,8 @@ check('generateCss never carries a center-width trace (CSS is untouched by the c
   for (const config of [
     { preset: 'onedark', centerContentWidth: 900, light: {}, dark: {} },
     { preset: 'onedark', centerContentWidth: 3000, light: {}, dark: {} },
+    { preset: 'onedark', uiScale: 125, light: {}, dark: {} },
+    { preset: 'onedark', uiScale: 500, light: {}, dark: {} },
     // The retired v0.5 field must be inert, not silently wired back up.
     { preset: 'onedark', centerMaxWidth: 900, light: {}, dark: {} },
   ]) {
@@ -248,20 +254,42 @@ check('onedark CSS keeps the palette, tokens and the shared card stylesheet', ()
   assert.deepEqual(stateTokens, ['--dsw-alias-state-business-primary', '--dsw-alias-state-business-tertiary'])
   assert.ok(css.includes('--dsw-specific-sidebar-nav-item-hover:'))
 
-  // Canonical card stylesheet, verbatim markers and all five rules.
+  // Canonical card stylesheet, verbatim markers and all eleven rules.
   for (const marker of [
-    'div:has(> [data-rightbar-col]):has(> [data-shell-bottom])',
+    'div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])',
+    'html[data-dsh-card-theme][data-windows-titlebar]',
     '>[class*="sidebarCol"]',
     '>div:has(+ [data-rightbar-col])',
+    'html[data-dsh-card-theme][data-platform] div[data-sidebar-collapsed]',
     'div[data-sidebar-right-panel="push"]',
     'div[data-sidebar-right-panel="push"][data-sidebar-right-open]',
-    'var(--dsh-card-theme-gap,8px)',
+    '>[data-side="rightbar"]{width:16px;margin-left:calc(-1.5*var(--dsh-card-theme-gap,8px) - 8px)}',
+    '>[data-side="sidebar"]{margin-left:0}',
+    '>[data-side]::after{content:""',
+    '>[data-side]:hover::after',
+    '>[data-side][data-dragging]::after',
+    'background:var(--dsh-theme-canvas,var(--dsw-alias-bg-base));padding:var(--dsh-card-theme-gap,8px)',
+    'padding-top:var(--dsh-windows-titlebar-height)',
+    'margin-left:var(--dsh-card-theme-gap,8px)',
+    'width:calc(var(--dsh-sidebar-width) - var(--dsh-card-theme-gap,8px))!important;right:0',
     'var(--dsh-card-theme-radius,12px)',
     'var(--dsw-specific-sidebar-fill)',
   ]) {
     assert.ok(css.includes(marker), 'card stylesheet marker ' + marker)
   }
-  assert.equal((css.match(/html\[data-dsh-card-theme\]/g) ?? []).length, 5, 'five card rules')
+  assert.equal(css.split('\n').filter(line => line.startsWith('html[data-dsh-card-theme]')).length, 11, 'eleven card rules')
+  // The handle keeps a visible grab affordance: a centred pill that grows and
+  // takes the accent color on hover and while dragging.
+  assert.ok(css.includes('width:4px;height:56px;border-radius:2px'), 'the grip is a small centred pill')
+  assert.ok(css.includes('opacity:.55'), 'the grip stays visible at rest (findable without hovering)')
+  assert.ok(css.includes('opacity:1;height:72px'), 'the grip grows and solidifies on hover/drag')
+  // Geometry contract for the rc.5 frame: columns keep their pixel tracks. The
+  // sidebar must never shrink (its root carries an inline width, so a margin
+  // clips the import button), the single gutter is the centre's left margin,
+  // and the right panel stays anchored to its (inset) track edge.
+  assert.ok(!/>\[class\*="sidebarCol"\]\{margin/.test(css), 'the sidebar card carries no margin (no clipped inline width)')
+  assert.ok(!/data-sidebar-right-panel="push"\]\{[^}]*\b(top|bottom):/.test(css), 'the push panel keeps its track top/bottom')
+  assert.ok(!/data-sidebar-right-panel="push"\]\{[^}]*right:var\(/.test(css), 'the push panel anchors at right:0')
   assert.ok(
     css.includes(
       'div[data-sidebar-right-panel="push"][data-sidebar-right-open]{background:var(--dsh-card-theme-bg,var(--dsw-alias-bg-base));box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}',
@@ -353,6 +381,19 @@ check('layoutBootScript keeps the card switch and drives --dsh-chat-user-width',
     script.includes("if(w>=400)document.documentElement.style.setProperty('" + CENTER_VAR + "',w+'px')"),
     'writes the platform variable only when a width is active',
   )
+  // Overall zoom: saved selection wins, config fallback is embedded clamped.
+  assert.ok(
+    script.includes('var z=typeof s.uiScale==="number"?(s.uiScale>=70?Math.min(200,Math.round(s.uiScale)):70):100;'),
+    'zoom clause',
+  )
+  assert.ok(
+    script.includes("if(z!==100)document.documentElement.style.setProperty('zoom',String(z/100))"),
+    'applies a non-default zoom',
+  )
+  assert.ok(layoutBootScript({ uiScale: 125 }).includes('):125;'), 'config zoom embedded')
+  assert.ok(layoutBootScript({ uiScale: 500 }).includes('):200;'), 'config zoom clamped before embedding')
+  assert.ok(layoutBootScript({ uiScale: 20 }).includes('):70;'), 'config zoom clamped up before embedding')
+  assert.ok(layoutBootScript({ uiScale: '125' }).includes('):100;'), 'non-number config falls back to 100')
   // Host config is embedded literally: card switch + clamped width fallback.
   assert.ok(layoutBootScript({ cardLayout: true }).includes('||true)document'))
   assert.ok(layoutBootScript({}).includes('||false)document'))
@@ -412,11 +453,46 @@ check('layoutBootScript applies the config × saved-selection precedence matrix'
   )
 
   // Storage failures stay silent (first paint just keeps the platform defaults).
-  run = runBootScript(layoutBootScript({ cardLayout: true, centerContentWidth: 1100 }), { throwOnRead: true })
+  run = runBootScript(layoutBootScript({ cardLayout: true, centerContentWidth: 1100, uiScale: 125 }), { throwOnRead: true })
   assert.ok(!('data-dsh-card-theme' in run.attributes))
   assert.equal(run.properties[CENTER_VAR], undefined)
+  assert.equal(run.properties.zoom, undefined)
   run = runBootScript(layoutBootScript({}), { selection: undefined })
   assert.equal(run.properties[CENTER_VAR], undefined)
+  assert.equal(run.properties.zoom, undefined)
+})
+
+check('layoutBootScript applies the uiScale config × saved-selection matrix', () => {
+  // Config zoom 125, no saved selection -> zoom 1.25 on <html>.
+  let run = runBootScript(layoutBootScript({ uiScale: 125 }))
+  assert.equal(run.properties.zoom, '1.25')
+  // Saved selection beats the config zoom, including a saved 100 (explicit default).
+  run = runBootScript(layoutBootScript({ uiScale: 125 }), { selection: { uiScale: 110 } })
+  assert.equal(run.properties.zoom, '1.1')
+  run = runBootScript(layoutBootScript({ uiScale: 125 }), { selection: { uiScale: 100 } })
+  assert.equal(run.properties.zoom, undefined, 'saved 100 suppresses the config zoom')
+  // Saved selection without uiScale falls back to the config.
+  run = runBootScript(layoutBootScript({ uiScale: 150 }), { selection: { cardLayout: true } })
+  assert.equal(run.properties.zoom, '1.5')
+  // Non-number saved values fall back to the config.
+  run = runBootScript(layoutBootScript({ uiScale: 150 }), { selection: { uiScale: '125' } })
+  assert.equal(run.properties.zoom, '1.5')
+  // Clamping: saved 500 -> 200, saved 20 -> 70, config 500 -> 200.
+  run = runBootScript(layoutBootScript({}), { selection: { uiScale: 500 } })
+  assert.equal(run.properties.zoom, '2')
+  run = runBootScript(layoutBootScript({}), { selection: { uiScale: 20 } })
+  assert.equal(run.properties.zoom, '0.7')
+  run = runBootScript(layoutBootScript({ uiScale: 500 }))
+  assert.equal(run.properties.zoom, '2')
+  // 100% is the platform default: no inline zoom is written at all.
+  run = runBootScript(layoutBootScript({ uiScale: 100 }))
+  assert.equal(run.properties.zoom, undefined)
+  assert.equal(runBootScript(layoutBootScript({})).properties.zoom, undefined)
+  // Card, width and zoom mechanisms stay independent.
+  run = runBootScript(layoutBootScript({ cardLayout: true, centerContentWidth: 1100, uiScale: 125 }))
+  assert.ok('data-dsh-card-theme' in run.attributes)
+  assert.equal(run.properties[CENTER_VAR], '1100px')
+  assert.equal(run.properties.zoom, '1.25')
 })
 
 // --- 7. Structured injection rows -----------------------------------------
@@ -428,7 +504,7 @@ check('indexInjectionRows emits global + layout boot script + style rows', () =>
   assert.deepEqual(globalRow, {
     kind: 'global',
     name: CONFIG_GLOBAL,
-    value: { preset: 'onedark', cardLayout: true, centerContentWidth: 900, light: {}, dark: {} },
+    value: { preset: 'onedark', cardLayout: true, centerContentWidth: 900, uiScale: 100, light: {}, dark: {} },
   })
   assert.equal(CONFIG_GLOBAL, '__DSH_THEME_PLUGIN_CONFIG__')
   assert.equal(scriptRow.kind, 'script')
@@ -456,11 +532,12 @@ check('indexInjectionRows emits global + layout boot script + style rows', () =>
   assert.ok(!indexInjectionRows({ preset: 'onedark' })[2].text.includes('--dsh-theme-canvas:'))
 })
 
-check('carrierPayload publishes cardLayout and the clamped centerContentWidth', () => {
+check('carrierPayload publishes cardLayout, the clamped centerContentWidth and uiScale', () => {
   assert.deepEqual(carrierPayload(undefined), {
     preset: undefined,
     cardLayout: false,
     centerContentWidth: -1,
+    uiScale: 100,
     light: {},
     dark: {},
   })
@@ -468,6 +545,7 @@ check('carrierPayload publishes cardLayout and the clamped centerContentWidth', 
     preset: undefined,
     cardLayout: false,
     centerContentWidth: -1,
+    uiScale: 100,
     light: {},
     dark: {},
   })
@@ -475,13 +553,15 @@ check('carrierPayload publishes cardLayout and the clamped centerContentWidth', 
     preset: 'stock',
     cardLayout: false,
     centerContentWidth: -1,
+    uiScale: 100,
     light: {},
     dark: {},
   })
-  assert.deepEqual(carrierPayload({ preset: 'stock', cardLayout: true, centerContentWidth: 900 }), {
+  assert.deepEqual(carrierPayload({ preset: 'stock', cardLayout: true, centerContentWidth: 900, uiScale: 125 }), {
     preset: 'stock',
     cardLayout: true,
     centerContentWidth: 900,
+    uiScale: 125,
     light: {},
     dark: {},
   })
@@ -499,6 +579,14 @@ check('carrierPayload publishes cardLayout and the clamped centerContentWidth', 
   const legacy = carrierPayload({ preset: 'nord', centerMaxWidth: 900 })
   assert.equal(legacy.centerContentWidth, -1)
   assert.ok(!('centerMaxWidth' in legacy), 'centerMaxWidth must not be published')
+  // Overall zoom: clamped to 70..200, non-numbers are the 100% default.
+  assert.equal(carrierPayload({ uiScale: 125 }).uiScale, 125)
+  assert.equal(carrierPayload({ uiScale: 500 }).uiScale, 200)
+  assert.equal(carrierPayload({ uiScale: 20 }).uiScale, 70)
+  assert.equal(carrierPayload({ uiScale: 100.6 }).uiScale, 101)
+  assert.equal(carrierPayload({ uiScale: '125' }).uiScale, 100)
+  assert.equal(carrierPayload({ uiScale: Number.NaN }).uiScale, 100)
+  assert.equal(carrierPayload({ uiScale: Number.POSITIVE_INFINITY }).uiScale, 100)
 })
 
 // --- 8. apply(): 0.2.x structured path ------------------------------------

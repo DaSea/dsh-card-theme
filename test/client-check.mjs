@@ -260,6 +260,8 @@ function createDocument() {
     },
   }
 
+  const listeners = new Map()
+  let frame = null
   const document = {
     head: {
       appendChild(node) {
@@ -270,6 +272,18 @@ function createDocument() {
     },
     body: {},
     documentElement,
+    querySelector(selector) {
+      // The shell frame is the only element the zoom compensation looks up.
+      return String(selector).includes('data-rightbar-col') ? frame : null
+    },
+    addEventListener(type, handler, capture) {
+      if (!listeners.has(type)) listeners.set(type, [])
+      listeners.get(type).push({ handler, capture })
+    },
+    removeEventListener() {},
+    setFrame(element) {
+      frame = element
+    },
     createElement(tagName) {
       return { tagName, id: '', style: {}, textContent: '', appendChild() {} }
     },
@@ -290,7 +304,7 @@ function createDocument() {
     },
   }
 
-  return { document, headChildren, documentElement }
+  return { document, headChildren, documentElement, listeners }
 }
 
 // ---------------------------------------------------------------------------
@@ -324,8 +338,20 @@ function createHarness(options = {}) {
     },
   }
 
-  const { document, headChildren, documentElement } = createDocument()
+  const { document, headChildren, documentElement, listeners } = createDocument()
   sandbox.document = document
+
+  // A minimal shell frame: viewport-sized, with getBoundingClientRect inherited
+  // from a prototype (as in the real DOM) so the zoom wrapper can be removed.
+  const framePrototype = {
+    getBoundingClientRect() {
+      return { x: 0, y: 0, width: 1600, height: 1000, left: 0, top: 0, right: 1600, bottom: 1000 }
+    },
+  }
+  const frame = Object.create(framePrototype)
+  frame.style = {}
+  frame.__dshCardThemeRect = undefined
+  document.setFrame(frame)
 
   if (options.hostConfig !== undefined) {
     sandbox.__DSH_THEME_PLUGIN_CONFIG__ = options.hostConfig
@@ -392,6 +418,20 @@ function createHarness(options = {}) {
     },
     centerWidthEnabled() {
       return documentElement.style.getPropertyValue(CENTER_TOKEN) !== ''
+    },
+    uiScale() {
+      return documentElement.style.getPropertyValue('zoom')
+    },
+    uiScaleEnabled() {
+      return documentElement.style.getPropertyValue('zoom') !== ''
+    },
+    frame,
+    pointerListeners(type) {
+      return listeners.get(type) ?? []
+    },
+    dispatchPointer(type, event) {
+      for (const entry of listeners.get(type) ?? []) entry.handler(event)
+      return event
     },
     layoutStyleNodes() {
       return headChildren.filter((node) => node.id === LAYOUT_STYLE_ID)
@@ -552,6 +592,8 @@ const NEW_ALIAS_TOKENS = [
   check(harness.cardLayoutEnabled() === false, 'card layout is off by default (attribute absent)')
   check(harness.centerWidth() === '', 'content width is 跟随默认 by default (no inline property on <html>)')
   check(harness.centerWidthEnabled() === false, 'content width is off by default')
+  check(harness.uiScale() === '', 'overall zoom is 100% by default (no inline zoom on <html>)')
+  check(harness.uiScaleEnabled() === false, 'overall zoom is off by default')
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +735,84 @@ const NEW_ALIAS_TOKENS = [
   })
   check(harness.centerWidth() === '', 'a saved 跟随默认 removes the property even when the config sets a width')
   check(harness.centerWidthEnabled() === false, 'a saved 跟随默认 leaves no inline property')
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 2j — overall zoom (uiScale) rides an inline CSS zoom on <html>
+// ---------------------------------------------------------------------------
+
+{
+  const harness = createHarness({ hostConfig: { preset: 'onedark', uiScale: 125 } })
+  check(harness.uiScale() === '1.25', 'host config uiScale:125 writes zoom:1.25 on <html>')
+  check(harness.uiScaleEnabled() === true, 'host-config zoom is live before first paint')
+  const tokens = harness.latestTokens()
+  check(
+    Object.keys(tokens).length === DERIVED_TOKEN_COUNT,
+    'zoom does not enter the override layer (expected ' + DERIVED_TOKEN_COUNT + ' tokens, got ' + Object.keys(tokens).length + ')',
+  )
+  check(tokens.zoom === undefined, 'overrideTokens never carries a zoom token')
+  validateTokens(tokens, 'host-config zoom override')
+}
+
+{
+  const harness = createHarness({ hostConfig: { preset: 'onedark', uiScale: 3000 } })
+  check(harness.uiScale() === '2', 'uiScale above the cap clamps to 200% (zoom:2)')
+  const low = createHarness({ hostConfig: { preset: 'onedark', uiScale: 20 } })
+  check(low.uiScale() === '0.7', 'uiScale below the floor clamps to 70% (zoom:0.7)')
+  const rounded = createHarness({ hostConfig: { preset: 'onedark', uiScale: 125.6 } })
+  check(rounded.uiScale() === '1.26', 'uiScale rounds to whole percents before dividing by 100')
+  const junk = createHarness({ hostConfig: { preset: 'onedark', uiScale: 'abc' } })
+  check(junk.uiScale() === '', 'a non-numeric uiScale means 100% (property removed)')
+}
+
+{
+  const harness = createHarness({
+    hostConfig: { preset: 'onedark', uiScale: 150 },
+    storedSelection: { preset: 'onedark', uiScale: 125 },
+  })
+  check(harness.uiScale() === '1.25', 'saved uiScale wins over the host config')
+}
+
+{
+  const harness = createHarness({
+    hostConfig: { preset: 'onedark', uiScale: 150 },
+    storedSelection: { preset: 'onedark', uiScale: 100 },
+  })
+  check(harness.uiScale() === '', 'a saved 100% suppresses the config zoom and removes the property')
+  check(harness.uiScaleEnabled() === false, 'a saved 100% leaves no inline zoom')
+}
+
+// ---------------------------------------------------------------------------
+// Scenario 2k — the UI scale keeps the shell's layout-pixel math intact
+// ---------------------------------------------------------------------------
+
+{
+  const harness = createHarness({ hostConfig: { preset: 'onedark', uiScale: 125 }, withFrame: true })
+  check(harness.uiScale() === '1.25', 'zoom 125% is written to <html>')
+  const rect = harness.frame.getBoundingClientRect()
+  check(rect.width === 1280, 'the zoomed frame reports its layout width (1600 / 1.25 = 1280)')
+  check(rect.right === 1280 && rect.left === 0, 'the patched rect carries left/right in layout px')
+  // Drag handles mix clientX (outer px) with layout-px column widths, so their
+  // pointer coordinates are converted; every other target keeps outer px.
+  const handle = { closest: (selector) => ({ selector }) }
+  const event = { target: handle, clientX: 250, clientY: 125 }
+  harness.dispatchPointer('pointermove', event)
+  check(event.clientX === 200, 'handle pointer x is converted to layout px (250 / 1.25)')
+  check(event.clientY === 100, 'handle pointer y is converted to layout px')
+  const other = { target: { closest: () => null }, clientX: 250, clientY: 125 }
+  harness.dispatchPointer('pointermove', other)
+  check(other.clientX === 250, 'non-handle pointers keep their outer coordinates')
+}
+
+{
+  // 100% removes the zoom and hands the frame its own rect back.
+  const harness = createHarness({ hostConfig: { preset: 'onedark', uiScale: 125 }, withFrame: true })
+  check(harness.frame.getBoundingClientRect().width === 1280, 'the frame is patched while zoomed')
+  const view = harness.mount()
+  clickChip(view, '默认 100%')
+  check(harness.uiScale() === '', 'clicking 默认 100% removes the inline zoom')
+  check(harness.frame.getBoundingClientRect().width === 1600, 'the frame rect is restored at 100%')
+  check(harness.frame.__dshCardThemeRect === undefined, 'the zoom wrapper is removed at 100%')
 }
 
 // ---------------------------------------------------------------------------
@@ -882,6 +1002,42 @@ const NEW_ALIAS_TOKENS = [
   check(tokens[CENTER_TOKEN] === undefined, '跟随默认 keeps the override layer palette-only')
   check(Object.keys(tokens).length === 2, 'stock 跟随默认 returns to the 2 surface tokens (got ' + Object.keys(tokens).length + ')')
 
+  // Overall-zoom row: 100% by default; chips and the slider only move the
+  // inline zoom on <html>, never the override layer.
+  const studioZoomText = collectText(view.tree)
+  check(studioZoomText.includes('整体缩放'), 'studio renders the overall-zoom row')
+  for (const label of ['90%', '默认 100%', '110%', '125%', '150%']) {
+    check(findButton(view.tree, label) !== null, 'studio shows the "' + label + '" zoom chip')
+  }
+  check(harness.uiScale() === '', 'overall zoom is 100% before any studio edit')
+
+  clickChip(view, '125%')
+  tokens = harness.latestTokens()
+  check(harness.uiScale() === '1.25', 'clicking 125% sets inline zoom 1.25 on <html>')
+  check(collectText(view.tree).includes('整体缩放（125%）'), 'the zoom row label reflects 125%')
+  check(
+    Object.keys(tokens).length === 2,
+    'stock + zoom still carries only the 2 surface tokens (got ' + Object.keys(tokens).length + ')',
+  )
+  validateTokens(tokens, 'stock zoom override')
+
+  const zoomSlider = findRangeInput(view.tree, 70, 200)
+  check(zoomSlider !== null, 'studio renders the overall-zoom range slider (70..200)')
+  if (zoomSlider !== null) {
+    checkEqual(zoomSlider.props.value, 125, 'the zoom slider reflects the selected 125%')
+    zoomSlider.props.onChange({ target: { value: '115' } })
+    view.tree = view.render()
+  }
+  check(harness.uiScale() === '1.15', 'dragging the zoom slider to 115 updates the inline zoom')
+  const zoomSliderAfter = findRangeInput(view.tree, 70, 200)
+  check(zoomSliderAfter !== null && zoomSliderAfter.props.value === 115, 'the zoom slider follows the dragged value')
+
+  clickChip(view, '默认 100%')
+  tokens = harness.latestTokens()
+  check(harness.uiScale() === '', 'clicking 默认 100% removes the inline zoom')
+  check(tokens.zoom === undefined, 'the zoom property never becomes an override token')
+  check(Object.keys(tokens).length === 2, 'stock 100% returns to the 2 surface tokens (got ' + Object.keys(tokens).length + ')')
+
   // Non-stock: the content width rides the inline property, cards still +5 tokens.
   clickChip(view, 'One Dark')
   clickChip(view, '超宽 1200px')
@@ -922,6 +1078,7 @@ const NEW_ALIAS_TOKENS = [
     validateTokens(call.tokens, 'recorded override')
     assertNoFontTokens(call.tokens, 'recorded override')
     check(call.tokens[CENTER_TOKEN] === undefined, 'no override call carries --dsh-chat-user-width')
+    check(call.tokens.zoom === undefined, 'no override call carries a zoom declaration')
     check(call.tokens['--dsh-theme-center-max-width'] === undefined, 'no override call carries the retired center token')
   }
   check(harness.layoutStyleNodes().length === 1, 'the card-layout <style> node is still injected exactly once')

@@ -2,4 +2,6 @@ node_modules/
 *.log
 dev.patch.yml
 .verify/
+.verify-*/
+.tmp-zoom/
 

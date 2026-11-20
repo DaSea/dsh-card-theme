@@ -1,7 +1,7 @@
 {
   "name": "dsh-card-theme",
-  "version": "0.6.0",
-  "description": "DSH Web GUI theme studio with three palettes (Nord, Solarized, One Dark), per-mode customization (accent, background, foreground, translucent sidebar, contrast, background image), an optional card layout for the left/center/right shell columns, and a conversation content column width via the platform --dsh-chat-user-width variable. Publishes CSS tokens and the host config through the official webserver/index-inject rows (tapIndex fallback on older shells).",
+  "version": "0.8.0",
+  "description": "DSH Web GUI theme studio with three palettes (Nord, Solarized, One Dark), per-mode customization (accent, background, foreground, translucent sidebar, contrast, background image), an optional card layout for the left/center/right shell columns, a conversation content column width via the platform --dsh-chat-user-width variable, and an overall UI scale (70-200%) applied as a CSS zoom on <html>. Publishes CSS tokens and the host config through the official webserver/index-inject rows (tapIndex fallback on older shells).",
   "repository": {
     "type": "git",
     "url": "https://github.com/DaSea/dsh-card-theme.git"
@@ -20,7 +20,8 @@
     "css-tokens",
     "wallpaper",
     "card-layout",
-    "content-width"
+    "content-width",
+    "ui-scale"
   ],
   "engines": {
     "node": ">=22.19.0",

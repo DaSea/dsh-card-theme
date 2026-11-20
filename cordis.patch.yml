@@ -2,8 +2,9 @@
 # (nord, solarized, onedark) plus the stock DeepSeek theme, per-mode custom
 # overrides for accent / background / foreground / translucent sidebar /
 # contrast / background image, an optional card layout for the three shell
-# columns, and a conversation content column width (centerContentWidth, px,
-# -1 = follow the platform default).
+# columns, a conversation content column width (centerContentWidth, px,
+# -1 = follow the platform default), and an overall UI scale (uiScale, percent,
+# 70..200, 100 = platform default, applied as an inline CSS zoom on <html>).
 # Values are CSS color/URL lists; names with spaces must be quoted.
 # The row's config is replaced entirely by later layers targeting the same id,
 # so restate every key you keep.
@@ -14,6 +15,7 @@
         preset: nord
         cardLayout: false
         centerContentWidth: -1
+        uiScale: 100
         light:
           accent: ''
           background: ''

@@ -7,6 +7,7 @@ Theme for the DeepSeek Harness (DSH) Web GUI, has features:
 2. accent, background, foreground, translucent sidebar, contrast and a wallpaper background image;
 3. plus an optional card layout for the three shell columns;
 4. a conversation content column width;
+5. an overall UI scale (70%–200%);
 
 ![示例|640x480](./main.png)
 
@@ -15,8 +16,9 @@ Theme for the DeepSeek Harness (DSH) Web GUI, has features:
 - 🎨 **3 built-in palettes** — `nord`, `solarized` and `onedark` (One Dark for dark mode, One Light for light mode), plus the stock DeepSeek theme `stock`; `custom` config mode reuses the Nord base palette
 - 🖌️ **Full customization** — accent, background, foreground, translucent sidebar, contrast and background image, configurable per mode (`light.*` / `dark.*`); studio pickers write one value for both modes
 - 🖼️ **Background image** — pick a local file or paste a URL, then tune the theme-color mask, blur, fit (`cover` / `contain` / `auto`) and alignment; the palette turns translucent so the wallpaper shows through the app chrome
-- 🃏 **Optional card layout** — turn the left sidebar, the center column and the right panel into rounded cards separated by a canvas gap; toggle it in Theme Studio or with `cardLayout: true` (fonts stay with the platform's own Appearance settings — the plugin does not configure them)
+- 🃏 **Optional card layout** — turn the left sidebar, the center column and the right panel into rounded cards separated by a uniform canvas gap; toggle it in Theme Studio or with `cardLayout: true` (fonts themselves stay with the platform's own Appearance settings — use the overall scale below to make sidebar text larger). Built for the 0.2.2-rc.5 shell geometry: the frame carries the canvas padding so every column keeps its full pixel width (nothing inside the sidebar clips, the import button included), the single inter-card gutter rides the center column's left margin, and the native drag handles are re-centred in the gutter between the cards with a visible grab pill and a 16 px hit strip, so both sidebars are easy to find and resize
 - 📐 **Content column width** — set the conversation content column's target width (400–2400 px, quick chips 640/748/920/1200, or the platform-automatic default); the leftover space becomes gutters. Implemented through the platform's own `--dsh-chat-user-width` variable, so native edge-drag handles keep working and win locally. Configure in Theme Studio or with `centerContentWidth`
+- 🔍 **Overall UI scale** — scale the whole interface from 70% to 200% (sidebar text, icons and spacing grow together), fixing the platform Appearance setting that only covers content font size; implemented as a CSS `zoom` on `<html>` (real reflow, not a raster stretch), applied before first paint by the boot script and live from the studio. Because `zoom` scales the outer pixel space while the shell solves its grid in layout pixels, a non-100% scale also makes the plugin hand the frame its layout width back and convert the drag handles' pointer deltas — otherwise the right panel would outgrow its track and its handle would drift hundreds of pixels away. Configure in Theme Studio or with `uiScale`
 - ⚡ **Instant hot-swap** — a Settings GUI ("Theme Studio") applies changes immediately through the official `ctx.theme.overrideTokens` API; light/dark follow the system preference
 - 💾 **Persistent** — the selection is saved in browser `localStorage` and survives reloads
 - 🧮 **100+ derived tokens** — three colors plus a contrast value expand into the current semantic token set: borders, layers, scrollbar, tooltip, code blocks, bubbles, sidebar states, settings cards, illustrations, onboarding surfaces…
@@ -25,7 +27,7 @@ Theme for the DeepSeek Harness (DSH) Web GUI, has features:
 
 ## Installation
 
-Requires DeepSeek Harness **0.2.2-rc.1** (installed and tested; 0.2.1-rc.2 and newer 0.2.x releases are supported) and a web-serving profile — `web` for `dsh web`, `desktop` for the desktop app. Install from the official registry (`--profile` names the profile that serves the GUI):
+Requires DeepSeek Harness **0.2.2-rc.5** (installed and tested; 0.2.1-rc.2 and newer 0.2.x releases are supported) and a web-serving profile — `web` for `dsh web`, `desktop` for the desktop app. Install from the official registry (`--profile` names the profile that serves the GUI):
 
 ```sh
 # browser build (dsh web):
@@ -52,8 +54,9 @@ After a restart, open **Settings → Theme Studio**:
 
 - **Preset** — one-click chips: DeepSeek default / Nord / Solarized / One Dark
 - **Colors** — color pickers for accent, background and foreground, with a "follow preset" reset
-- **Card layout** — off / on; the left, center and right columns become rounded cards over a canvas gap
+- **Card layout** — off / on; the left, center and right columns become rounded cards over one uniform 8 px canvas gap (all four outer edges and the gutter between cards match)
 - **Content width** — slider 400–2400 px plus 跟随默认 / 640 / 748 / 920 / 1200 presets; sets the conversation content column's width (gutters excluded)
+- **Overall scale** — slider 70–200% plus 90 / 100 / 110 / 125 / 150 presets; 100% is the platform default, and 110%–125% is a good range when the sidebar text feels small
 - **Translucent sidebar** — follow preset / on / off
 - **Background image** — choose a local file (compressed automatically) or paste an image URL, then adjust the mask (0–100%), blur (0–60 px), fit and alignment; clear it to return to a plain surface
 - **Contrast** — slider 0–100 with preset restore
@@ -69,6 +72,7 @@ Every change applies instantly and persists locally; GUI selections take priorit
 | `preset` | enum | `stock` · `nord` · `solarized` · `onedark` · `custom` (default `nord`) |
 | `cardLayout` | boolean | card layout for the three shell columns (default `false`); also toggleable in Theme Studio |
 | `centerContentWidth` | number | conversation content column width in px, clamped 400–2400; `-1` = follow the platform default (680–920 px responsive; default) |
+| `uiScale` | number | overall UI scale in percent, clamped 70–200, default `100` (native size); only a non-`100` value writes an inline `zoom` on `<html>`; a saved studio selection wins over this config |
 | `light.accent` | color | accent for light mode (primary buttons, links, …) |
 | `light.background` | color | light-mode background |
 | `light.foreground` | color | light-mode primary text |
@@ -93,6 +97,7 @@ Example — merge into the serving profile's patch (`$DSH_HOME/profiles/<profile
     preset: nord
     cardLayout: true
     centerContentWidth: 960
+    uiScale: 110
     light:
       accent: '#FF6B35'
       background: '#FFFAF0'
@@ -139,13 +144,14 @@ Only set the fields you want to change; leave the rest blank (`''` / `preset` / 
 - **Token derivation** — from background / foreground / accent plus a contrast factor, a small functional engine derives 100+ semantic tokens: border levels, layers, scrollbar, tooltip, markdown code blocks, bubbles, sidebar states, plus the 0.2.2 surfaces (settings cards, illustrations, menu group headers, onboarding cards, turn triggers, switch thumb, toolbar fills, toast label). Status and diff colors (success / error / warn / file diffs) keep their stock meaning.
 - **Translucent sidebar** — `--dsw-specific-sidebar-fill` is emitted as `rgba(mix(bg, fg, 3%), 0.65)` when enabled; AppFrame / SidebarRoot / WorkspaceBrowser / TrajectoryTable consume that variable directly.
 - **Wallpaper** — the image is painted on a fixed `body::before` layer (`z-index: -1`, above the page canvas and below the app content). With an image active, `--dsw-alias-bg-base` and `--dsw-specific-sidebar-fill` become translucent by the mask percentage, so the wallpaper is visible through the app surfaces; blur uses a negative-inset layer to avoid soft edges.
-- **Card layout** — the stylesheet is attribute-gated (`html[data-dsh-card-theme]`) and targets the shell structurally: the frame is the element owning `[data-rightbar-col]` and `[data-shell-bottom]`, the left card is its `[class*="sidebarCol"]` child, the center card is the child followed by the rightbar track, and the right panel is `[data-sidebar-right-panel="push"]`. Card geometry and colors arrive as five `--dsh-theme-*` custom properties, so they follow the active palette and background image. The host half also emits a tiny boot script that applies the attribute from the host config or a saved studio selection before first paint, and the client half toggles the attribute live.
+- **Card layout** — the stylesheet is attribute-gated (`html[data-dsh-card-theme]`) and targets the shell structurally: the frame is the element owning `[data-rightbar-col]` and `[data-shell-bottom]`, the left card is its `[class*="sidebarCol"]` child, the center card is the child followed by the rightbar track, and the right panel is `[data-sidebar-right-panel="push"]`. Card geometry and colors arrive as five `--dsh-theme-*` custom properties, so they follow the active palette and background image. The host half also emits a tiny boot script that applies the attribute from the host config or a saved studio selection before first paint, and the client half toggles the attribute live. Geometry (0.8.0, for the rc.5 shell): the platform sizes the three grid tracks in pixels and the occupants trust those pixels — the sidebar root keeps an inline width and the right panel anchors to its track — so shrinking the columns with margins clipped the sidebar content and desynchronised the panel from its drag handle. Instead the frame itself takes the canvas `padding`, every track keeps its full width, the one inter-card gutter rides the center column's `margin-left`, the right panel keeps `right: 0` and shrinks by a single gap from its (already inset) track, and the frame-level drag handles get their hit strips re-centred on the new card borders (the sidebar handle lands there automatically because its grid-area containing block starts at the padding edge). Drawer mode is excluded (`:not([data-sidebar-drawer])`), and the Windows caption keeps its titlebar padding.
 - **Content width** — the platform's conversation view already sizes its content column from `--dsh-chat-content-width: var(--dsh-chat-user-width, clamp(680px, …, 920px))`. The plugin simply publishes `--dsh-chat-user-width: <N>px` on `<html>`: the boot script does it before first paint (host config or saved studio selection), the client half keeps it in sync live, and `-1` removes the property to fall back to the automatic width. Because the native width handles write the same variable inline on the conversation body (a closer element), manual dragging still overrides the global value locally.
+- **Overall scale** — the platform's fonts and control sizes are hardcoded px (changing the root `font-size` cannot scale them), so the plugin writes CSS `zoom: <uiScale>/100` on `<html>`. Unlike `transform: scale()`, `zoom` relayouts and scales fixed overlays while keeping them pinned; the DSH shell uses the 100%-height chain on `html/body/#root`, so the scaled app still fills the viewport instead of overflowing or leaving blank space the way a `100vh` layout would. The boot script applies it before first paint (only for non-100% values), the client half keeps it live, and 100% removes the property to hand the native size back to the platform.
 - **Specificity** — the injected selectors are written as `html body` / `html body[data-ds-dark-theme]` (and `::before` for the wallpaper); the client half writes `{ light, dark }` pairs and lets the theme runtime pick the active mode.
 
 ## Compatibility
 
-- DeepSeek Harness Web GUI, **0.2.2-rc.1** (installed and tested); `engines.dsh: >=0.2.1-rc.2 <0.3.0-0`
+- DeepSeek Harness Web GUI, **0.2.2-rc.5** (installed and tested); `engines.dsh: >=0.2.1-rc.2 <0.3.0-0`
 - Node.js >= 22.19
 - Peer dependencies: `@deepseek-ai/cordis` (^4.0.5 / ^4.0.6-alpha.1), `@deepseek-ai/dsh-host-webserver` (^0.2.1-rc.2 / ^0.2.2-alpha.2)
 - Older 0.1.0-rc.x releases are not supported by this version (the client entry/config ABI changed in 0.2.x)

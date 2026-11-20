@@ -170,12 +170,28 @@ window.__ModuleLoader__.load({
 
     const CARD_ATTRIBUTE = 'data-dsh-card-theme'
     // Canonical stylesheet shared verbatim with index.js (parity-check compares it).
+    // Geometry: the platform sizes the three grid tracks in pixels and the column
+    // occupants trust those pixels (the sidebar root keeps an inline width, the
+    // right panel anchors to its track). Shrinking the columns with margins broke
+    // both — the sidebar content clipped (import button cut on the right) and the
+    // right panel no longer matched its drag handle. Instead the frame itself gets
+    // the canvas padding, so every track keeps its full pixel width; the single
+    // inter-card gutter rides the centre column's left margin, and the right panel
+    // shrinks by one gap from the (already inset) track edge. The drag handles are
+    // frame children positioned from viewport pixels, so card mode re-centres their
+    // 8px hit strips on the new card borders.
     const CARD_LAYOUT_CSS = `
-html[data-dsh-card-theme] div:has(> [data-rightbar-col]):has(> [data-shell-bottom]){background:var(--dsh-theme-canvas,var(--dsw-alias-bg-base))}
-html[data-dsh-card-theme] div:has(> [data-rightbar-col]):has(> [data-shell-bottom])>[class*="sidebarCol"]{margin:var(--dsh-card-theme-gap,8px);border-right:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsw-specific-sidebar-fill);box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
-html[data-dsh-card-theme] div:has(> [data-rightbar-col]):has(> [data-shell-bottom])>div:has(+ [data-rightbar-col]){margin:var(--dsh-card-theme-gap,8px);border-left:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsh-card-theme-bg,var(--dsw-alias-bg-base));box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
-html[data-dsh-card-theme] div[data-sidebar-right-panel="push"]{width:calc(var(--dsh-sidebar-width) - var(--dsh-card-theme-gap,8px))!important;top:var(--dsh-card-theme-gap,8px);bottom:var(--dsh-card-theme-gap,8px);right:var(--dsh-card-theme-gap,8px);border-radius:var(--dsh-card-theme-radius,12px)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom]){background:var(--dsh-theme-canvas,var(--dsw-alias-bg-base));padding:var(--dsh-card-theme-gap,8px)}
+html[data-dsh-card-theme][data-windows-titlebar] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom]){padding-top:var(--dsh-windows-titlebar-height)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[class*="sidebarCol"]{border-right:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsw-specific-sidebar-fill);box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>div:has(+ [data-rightbar-col]){margin-left:var(--dsh-card-theme-gap,8px);border-left:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsh-card-theme-bg,var(--dsw-alias-bg-base));box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
+html[data-dsh-card-theme][data-platform] div[data-sidebar-collapsed]:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>div:has(+ [data-rightbar-col]){margin-left:0}
+html[data-dsh-card-theme] div[data-sidebar-right-panel="push"]{width:calc(var(--dsh-sidebar-width) - var(--dsh-card-theme-gap,8px))!important;right:0;border-radius:var(--dsh-card-theme-radius,12px)}
 html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-right-open]{background:var(--dsh-card-theme-bg,var(--dsw-alias-bg-base));box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side="rightbar"]{width:16px;margin-left:calc(-1.5*var(--dsh-card-theme-gap,8px) - 8px)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side="sidebar"]{margin-left:0}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side]::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:56px;border-radius:2px;background:var(--dsw-alias-label-caption,var(--dsw-alias-border-l4,rgba(128,128,128,.5)));opacity:.55;transform:translate(-50%,-50%);transition:opacity .15s,height .15s,background-color .15s;pointer-events:none}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side]:hover::after,html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side][data-dragging]::after{opacity:1;height:72px;background:var(--dsw-alias-state-business-primary,var(--dsw-alias-label-primary))}
 `
 
     const CENTER_TOKEN = '--dsh-chat-user-width'
@@ -199,6 +215,13 @@ html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-righ
     // anything below 400 — including -1 and non-numbers — means 跟随默认.
     function centerWidthValue(raw) {
       return typeof raw === 'number' && Number.isFinite(raw) && raw >= 400 ? Math.min(2400, Math.round(raw)) : -1
+    }
+
+    // Overall UI zoom in percent: 70..200 effective (clamped), 100 = platform
+    // default. Mirrors index.js; the platform hardcodes px font sizes, so only a
+    // CSS zoom scales the whole UI (root font-size does not).
+    function uiScaleValue(raw) {
+      return typeof raw === 'number' && Number.isFinite(raw) ? Math.min(200, Math.max(70, Math.round(raw))) : 100
     }
 
     // ---------------------------------------------------------------------
@@ -466,6 +489,7 @@ html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-righ
         base,
         cardLayout: sel.cardLayout === true,
         centerContentWidth: centerWidthValue(sel.centerContentWidth),
+        uiScale: uiScaleValue(sel.uiScale),
         light: resolveMode('light', base, custom),
         dark: resolveMode('dark', base, customDark),
       }
@@ -560,6 +584,119 @@ html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-righ
       const el = document.documentElement
       if (typeof px === 'number' && px >= 400) el.style.setProperty(CENTER_TOKEN, Math.min(2400, Math.round(px)) + 'px')
       else el.style.removeProperty(CENTER_TOKEN)
+    }
+
+    // Zoom on <html> scales layout, fonts, icons and fixed overlays together
+    // (unlike transform, it reflows). The DSH shell is a 100% height chain, so
+    // it keeps filling the viewport at any zoom; 100% removes the property.
+    //
+    // CSS zoom scales the *outer* pixel space while the shell solves its grid in
+    // *layout* pixels: AppFrame measures itself with getBoundingClientRect
+    // (outer px, zoom included) but writes the resolved tracks back as inline px
+    // (layout px). At a non-100% scale the sidebar/rightbar preferences therefore
+    // outgrow the grid, the right panel overhangs the centre, and its drag handle
+    // strands hundreds of pixels away from the panel edge. While a scale is
+    // active the plugin hands the frame its layout width back (a per-element
+    // wrapper, not a global prototype patch) and converts the drag handles'
+    // pointer deltas into layout px, so everything is solved in the same space
+    // the CSS lays out.
+    let activeZoom = 1
+    let frameWatch = 0
+    let pointerScaling = false
+
+    function frameElement() {
+      try {
+        return document.querySelector('div:has(> [data-rightbar-col]):has(> [data-shell-bottom])')
+      } catch {
+        return null
+      }
+    }
+
+    // Give the frame a layout-pixel getBoundingClientRect while zoomed.
+    function patchFrame(frame) {
+      if (!frame || typeof frame.getBoundingClientRect !== 'function') return false
+      if (frame.__dshCardThemeRect !== undefined) return true
+      const original = frame.getBoundingClientRect
+      frame.__dshCardThemeRect = original
+      frame.getBoundingClientRect = function () {
+        const rect = original.call(this)
+        const now = activeZoom
+        if (now === 1) return rect
+        const scaled = { x: rect.x / now, y: rect.y / now, width: rect.width / now, height: rect.height / now }
+        scaled.left = scaled.x
+        scaled.top = scaled.y
+        scaled.right = scaled.x + scaled.width
+        scaled.bottom = scaled.y + scaled.height
+        return scaled
+      }
+      // The platform's ResizeObserver only re-measures on a size change; nudge
+      // the frame once so the pre-patch measurement cannot linger.
+      try {
+        frame.style.paddingRight = '0.01px'
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { frame.style.paddingRight = '' })
+      } catch {}
+      return true
+    }
+
+    function unpatchFrame() {
+      const frame = frameElement()
+      if (!frame || frame.__dshCardThemeRect === undefined) return
+      try {
+        delete frame.getBoundingClientRect
+      } catch {}
+      try {
+        delete frame.__dshCardThemeRect
+      } catch {}
+    }
+
+    // Retry while the shell mounts: the client entry loads before AppFrame.
+    function ensureFramePatch(attempts) {
+      if (patchFrame(frameElement())) return
+      if (attempts <= 0) return
+      if (typeof requestAnimationFrame === 'function') {
+        frameWatch = requestAnimationFrame(() => ensureFramePatch(attempts - 1))
+      } else if (typeof setTimeout === 'function') {
+        frameWatch = setTimeout(() => ensureFramePatch(attempts - 1), 100)
+      }
+    }
+
+    // Drag handles mix clientX (outer px) with layout-px column widths; convert
+    // the pointer coordinates back into layout px for those two handles only.
+    function installPointerScaling() {
+      if (pointerScaling || typeof document.addEventListener !== 'function') return
+      pointerScaling = true
+      const scale = (event) => {
+        const now = activeZoom
+        if (now === 1) return
+        const target = event.target
+        if (!target || typeof target.closest !== 'function') return
+        if (target.closest('[data-side="sidebar"],[data-side="rightbar"]') === null) return
+        const x = event.clientX
+        const y = event.clientY
+        try {
+          Object.defineProperty(event, 'clientX', { configurable: true, get: () => x / now })
+          Object.defineProperty(event, 'clientY', { configurable: true, get: () => y / now })
+        } catch {}
+      }
+      for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel']) {
+        document.addEventListener(type, scale, true)
+      }
+    }
+
+    function applyUiScale(percent) {
+      const el = document.documentElement
+      const value = uiScaleValue(percent)
+      activeZoom = value / 100
+      if (value === 100) {
+        el.style.removeProperty('zoom')
+        if (frameWatch && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frameWatch)
+        frameWatch = 0
+        unpatchFrame()
+        return
+      }
+      el.style.setProperty('zoom', String(value / 100))
+      installPointerScaling()
+      ensureFramePatch(120)
     }
 
     // ---------------------------------------------------------------------
@@ -724,6 +861,7 @@ html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-righ
         foreground: typeof sel.foreground === 'string' ? sel.foreground : '',
         cardLayout: sel.cardLayout === true,
         centerContentWidth: centerWidthValue(sel.centerContentWidth),
+        uiScale: uiScaleValue(sel.uiScale),
         translucentSidebar: typeof sel.translucentSidebar === 'string' ? sel.translucentSidebar : 'preset',
         contrast: typeof sel.contrast === 'number' ? sel.contrast : -1,
         backgroundImage: typeof sel.backgroundImage === 'string' ? sel.backgroundImage : '',
@@ -744,6 +882,7 @@ html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-righ
         preset: cfg.preset,
         cardLayout: cfg.cardLayout,
         centerContentWidth: cfg.centerContentWidth,
+        uiScale: cfg.uiScale,
         accent: light.accent,
         background: light.background,
         foreground: light.foreground,
@@ -799,6 +938,7 @@ html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-righ
         applyBackdrop(resolved.light, resolved.dark)
         applyCardLayout(sel.cardLayout === true)
         applyCenterWidth(sel.centerContentWidth)
+        applyUiScale(resolved.uiScale)
         if (persist !== false) saveSelection(sel)
       }
 
@@ -1009,6 +1149,18 @@ html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-righ
               React.createElement('button', { type: 'button', style: sel.cardLayout ? { ...style.chip, ...style.chipActive } : style.chip, onClick: () => update({ cardLayout: true }) }, '开启'),
             ),
             React.createElement('div', { style: style.hint }, '左中右三栏各自成为圆角卡片,露出画布间隙;可与任意配色、背景图片同时使用。'),
+          ),
+          React.createElement('div', { style: style.row },
+            React.createElement('div', { style: style.label }, '整体缩放（' + sel.uiScale + '%）'),
+            React.createElement('input', { type: 'range', min: 70, max: 200, step: 5, value: sel.uiScale, style: style.range, onChange: (e) => update({ uiScale: Number(e.target.value) }) }),
+            React.createElement('div', { style: style.chips },
+              React.createElement('button', { type: 'button', style: sel.uiScale === 90 ? { ...style.chip, ...style.chipActive } : style.chip, onClick: () => update({ uiScale: 90 }) }, '90%'),
+              React.createElement('button', { type: 'button', style: sel.uiScale === 100 ? { ...style.chip, ...style.chipActive } : style.chip, onClick: () => update({ uiScale: 100 }) }, '默认 100%'),
+              React.createElement('button', { type: 'button', style: sel.uiScale === 110 ? { ...style.chip, ...style.chipActive } : style.chip, onClick: () => update({ uiScale: 110 }) }, '110%'),
+              React.createElement('button', { type: 'button', style: sel.uiScale === 125 ? { ...style.chip, ...style.chipActive } : style.chip, onClick: () => update({ uiScale: 125 }) }, '125%'),
+              React.createElement('button', { type: 'button', style: sel.uiScale === 150 ? { ...style.chip, ...style.chipActive } : style.chip, onClick: () => update({ uiScale: 150 }) }, '150%'),
+            ),
+            React.createElement('div', { style: style.hint }, '整体放大或缩小整个界面（文字、图标、间距同步缩放）。100% 为平台默认；侧边栏字体偏小时可调到 110%–125%。'),
           ),
           React.createElement('div', { style: style.row },
             React.createElement('div', { style: style.label }, '内容区域宽度（' + (sel.centerContentWidth < 400 ? '跟随默认' : sel.centerContentWidth + 'px') + '）'),

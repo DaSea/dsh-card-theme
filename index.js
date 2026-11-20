@@ -249,6 +249,10 @@ export const Config = z.object({
   // 内容列宽度（px，经平台 --dsh-chat-user-width 下发）：>=400 生效（clamp
   // 400..2400），-1 表示不限（跟随平台自动宽度）。
   centerContentWidth: z.number().default(-1),
+  // 整体缩放（百分比，经 documentElement 的 CSS zoom 下发）：70..200 生效
+  // （clamp），100 表示平台默认。平台的字号与控件尺寸都是硬编码 px，改 root
+  // font-size 无法缩放，必须以 zoom 缩放整个界面。
+  uiScale: z.number().default(100),
   light: ModeSchema.default({}),
   dark: ModeSchema.default({}),
 })
@@ -441,12 +445,28 @@ function resolveConfig(raw) {
 const STORAGE_KEY = 'dsh-card-theme:selection'
 const CARD_ATTRIBUTE = 'data-dsh-card-theme'
 // Canonical stylesheet shared verbatim with client.js (test/parity-check.mjs compares it).
+// Geometry: the platform sizes the three grid tracks in pixels and the column
+// occupants trust those pixels (the sidebar root keeps an inline width, the
+// right panel anchors to its track). Shrinking the columns with margins broke
+// both — the sidebar content clipped (import button cut on the right) and the
+// right panel no longer matched its drag handle. Instead the frame itself gets
+// the canvas padding, so every track keeps its full pixel width; the single
+// inter-card gutter rides the centre column's left margin, and the right panel
+// shrinks by one gap from the (already inset) track edge. The drag handles are
+// frame children positioned from viewport pixels, so card mode re-centres their
+// 8px hit strips on the new card borders.
 const CARD_LAYOUT_CSS = `
-html[data-dsh-card-theme] div:has(> [data-rightbar-col]):has(> [data-shell-bottom]){background:var(--dsh-theme-canvas,var(--dsw-alias-bg-base))}
-html[data-dsh-card-theme] div:has(> [data-rightbar-col]):has(> [data-shell-bottom])>[class*="sidebarCol"]{margin:var(--dsh-card-theme-gap,8px);border-right:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsw-specific-sidebar-fill);box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
-html[data-dsh-card-theme] div:has(> [data-rightbar-col]):has(> [data-shell-bottom])>div:has(+ [data-rightbar-col]){margin:var(--dsh-card-theme-gap,8px);border-left:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsh-card-theme-bg,var(--dsw-alias-bg-base));box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
-html[data-dsh-card-theme] div[data-sidebar-right-panel="push"]{width:calc(var(--dsh-sidebar-width) - var(--dsh-card-theme-gap,8px))!important;top:var(--dsh-card-theme-gap,8px);bottom:var(--dsh-card-theme-gap,8px);right:var(--dsh-card-theme-gap,8px);border-radius:var(--dsh-card-theme-radius,12px)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom]){background:var(--dsh-theme-canvas,var(--dsw-alias-bg-base));padding:var(--dsh-card-theme-gap,8px)}
+html[data-dsh-card-theme][data-windows-titlebar] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom]){padding-top:var(--dsh-windows-titlebar-height)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[class*="sidebarCol"]{border-right:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsw-specific-sidebar-fill);box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>div:has(+ [data-rightbar-col]){margin-left:var(--dsh-card-theme-gap,8px);border-left:0;border-radius:var(--dsh-card-theme-radius,12px);background:var(--dsh-card-theme-bg,var(--dsw-alias-bg-base));box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
+html[data-dsh-card-theme][data-platform] div[data-sidebar-collapsed]:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>div:has(+ [data-rightbar-col]){margin-left:0}
+html[data-dsh-card-theme] div[data-sidebar-right-panel="push"]{width:calc(var(--dsh-sidebar-width) - var(--dsh-card-theme-gap,8px))!important;right:0;border-radius:var(--dsh-card-theme-radius,12px)}
 html[data-dsh-card-theme] div[data-sidebar-right-panel="push"][data-sidebar-right-open]{background:var(--dsh-card-theme-bg,var(--dsw-alias-bg-base));box-shadow:inset 0 0 0 .5px var(--dsh-card-theme-border,transparent)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side="rightbar"]{width:16px;margin-left:calc(-1.5*var(--dsh-card-theme-gap,8px) - 8px)}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side="sidebar"]{margin-left:0}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side]::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:56px;border-radius:2px;background:var(--dsw-alias-label-caption,var(--dsw-alias-border-l4,rgba(128,128,128,.5)));opacity:.55;transform:translate(-50%,-50%);transition:opacity .15s,height .15s,background-color .15s;pointer-events:none}
+html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side]:hover::after,html[data-dsh-card-theme] div:not([data-sidebar-drawer]):has(> [data-rightbar-col]):has(> [data-shell-bottom])>[data-side][data-dragging]::after{opacity:1;height:72px;background:var(--dsw-alias-state-business-primary,var(--dsw-alias-label-primary))}
 `
 
 // 平台自身的会话内容宽度变量：document 级下发后，内容列直接取该值且不再走 clamp；
@@ -456,6 +476,16 @@ const CENTER_TOKEN = '--dsh-chat-user-width'
 // 内容列目标宽度：>=400 生效（clamp 400..2400），其余值（默认 -1）表示不限。
 function centerWidthValue(raw) {
   return typeof raw === 'number' && Number.isFinite(raw) && raw >= 400 ? Math.min(2400, Math.round(raw)) : -1
+}
+
+// 整体缩放百分比：70..200 生效（clamp），其余值（默认 100）表示平台默认。
+function uiScaleValue(raw) {
+  return typeof raw === 'number' && Number.isFinite(raw) ? Math.min(200, Math.max(70, Math.round(raw))) : 100
+}
+
+// 与客户端一致的首屏缩放表达式：保存的选择优先，其次宿主配置。
+function uiScaleFromSaved(rawConfig) {
+  return 'typeof s.uiScale==="number"?(s.uiScale>=70?Math.min(200,Math.round(s.uiScale)):70):' + uiScaleValue(rawConfig?.uiScale)
 }
 
 // The five custom properties that switch the card stylesheet on. Values are
@@ -479,14 +509,17 @@ function cardTokens(mode, bg, fg, cfg) {
 // content width is published through the platform's own --dsh-chat-user-width
 // variable on <html>, so the conversation column takes exactly that width at
 // first paint; the platform's native drag (element-level inline style) still
-// wins locally.
+// wins locally. The overall zoom (uiScale) is applied the same way, before the
+// first paint, so a scaled UI never flashes at 100%.
 export function layoutBootScript(rawConfig) {
   const fromConfig = rawConfig?.cardLayout === true ? 'true' : 'false'
   const centerFromConfig = centerWidthValue(rawConfig?.centerContentWidth)
   return "(function(){try{var s=JSON.parse(localStorage.getItem('" + STORAGE_KEY + "')||'null')||{};"
     + 'if(s.cardLayout===true||' + fromConfig + ")document.documentElement.setAttribute('" + CARD_ATTRIBUTE + "','');"
     + 'var w=typeof s.centerContentWidth==="number"?(s.centerContentWidth>=400?Math.min(2400,Math.round(s.centerContentWidth)):-1):' + centerFromConfig + ';'
-    + 'if(w>=400)document.documentElement.style.setProperty(' + "'" + CENTER_TOKEN + "',w+'px')"
+    + 'if(w>=400)document.documentElement.style.setProperty(' + "'" + CENTER_TOKEN + "',w+'px');"
+    + 'var z=' + uiScaleFromSaved(rawConfig) + ';'
+    + "if(z!==100)document.documentElement.style.setProperty('zoom',String(z/100))"
     + '}catch(e){}})()'
 }
 
@@ -567,6 +600,7 @@ export function carrierPayload(rawConfig) {
     preset: cfg.preset,
     cardLayout: cfg.cardLayout === true,
     centerContentWidth: centerWidthValue(cfg.centerContentWidth),
+    uiScale: uiScaleValue(cfg.uiScale),
     light: cfg.light ?? {},
     dark: cfg.dark ?? {},
   }

@@ -44,10 +44,10 @@ function colorMap(source) {
   return map
 }
 
-/** Parse every `'--dsh-theme-token': expression,` pair in the whole file. */
+/** Parse every `'--dsh-card-theme-token': expression,` pair in the whole file. */
 function themeTokenMap(source) {
   const map = new Map()
-  const pattern = /'(--dsh-theme-[a-z0-9-]+)':\s*([^,\n]+(?:\n[^,\n]+)*),/g
+  const pattern = /'(--dsh-(?:card-)?theme-[a-z0-9-]+)':\s*([^,\n]+(?:\n[^,\n]+)*),/g
   let match
   while ((match = pattern.exec(source)) !== null) map.set(match[1], match[2].replace(/\s+/g, ' ').trim())
   return map
@@ -174,10 +174,45 @@ for (const [name, source] of [['index.js', host], ['client.js', client]]) {
   assert.equal(body(client), body(host), name + ' centerWidthValue matches index.js')
 }
 
+// ---------------------------------------------------------------------------
+// Overall zoom (uiScale): both halves clamp the percent the same way and apply
+// it as an inline CSS zoom on <html>.
+// ---------------------------------------------------------------------------
+function functionBody(source, signature, label) {
+  const i = source.indexOf(signature)
+  assert.notEqual(i, -1, label + ' is missing ' + signature)
+  let depth = 0
+  const j = source.indexOf('{', i)
+  for (let k = j; k < source.length; k += 1) {
+    if (source[k] === '{') depth += 1
+    else if (source[k] === '}') {
+      depth -= 1
+      if (depth === 0) return source.slice(j, k + 1).replace(/\s+/g, ' ')
+    }
+  }
+  throw new Error('unbalanced ' + signature + ' in ' + label)
+}
+
+assert.equal(
+  functionBody(client, 'function uiScaleValue(raw)', 'client.js'),
+  functionBody(host, 'function uiScaleValue(raw)', 'index.js'),
+  'uiScaleValue matches index.js',
+)
+for (const [name, source] of [['index.js', host], ['client.js', client]]) {
+  assert.ok(source.includes("setProperty('zoom'"), name + ' applies the zoom through setProperty')
+}
+assert.ok(host.includes("if(z!==100)"), 'index.js only writes the inline zoom for non-default scales')
+assert.ok(client.includes("el.style.removeProperty('zoom')"), 'client.js removes the zoom at 100%')
+// The client half compensates the shell's layout-pixel math while zoomed.
+assert.ok(client.includes('function patchFrame('), 'client.js patches the frame rect under zoom')
+assert.ok(client.includes('__dshCardThemeRect'), 'client.js remembers the original frame rect')
+assert.ok(client.includes("data-side=\"sidebar\"],[data-side=\"rightbar\""), 'client.js scales only the drag-handle pointers')
+
 console.log('ok - fonts removed from both halves')
 console.log('ok - presets identical across index.js and client.js (' + presetKeys.length + ')')
 console.log('ok - derived color maps identical (' + hostColors.size + ' tokens)')
 console.log('ok - conditional card tokens identical (' + hostCardTokens.size + ')')
 console.log('ok - CARD_LAYOUT_CSS identical (' + hostCss.length + ' chars)')
 console.log('ok - center content width uses --dsh-chat-user-width in both halves')
+console.log('ok - overall zoom (uiScale) is applied as a CSS zoom on <html> in both halves')
 console.log('parity checks passed')
