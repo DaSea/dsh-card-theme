@@ -40,7 +40,7 @@
     "cordis.patch.yml",
     "README.md"
   ],
-  "author": "Xu Yuanshan",
+  "author": "DaSea",
   "license": "MIT",
   "scripts": {
     "test": "node test/host-check.mjs && node test/client-check.mjs && node test/parity-check.mjs"
